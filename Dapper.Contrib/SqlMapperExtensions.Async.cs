@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -142,7 +143,54 @@ namespace Dapper.Contrib.Extensions
             var allProperties = TypePropertiesCache(type);
             var keyProperties = KeyPropertiesCache(type);
             var computedProperties = ComputedPropertiesCache(type);
+            var defaultValueProperties = DefaultValuePropertiesCache(type);
             var allPropertiesExceptKeyAndComputed = allProperties.Except(keyProperties.Union(computedProperties)).ToList();
+
+            var allPropertiesExceptKeyAndComputedAndDefaultValue = new List<PropertyInfo>();
+            foreach (var propertyInfo in allPropertiesExceptKeyAndComputed)
+            {
+                var defaultValueProperty = defaultValueProperties.FirstOrDefault(x => x.Item1 == propertyInfo);
+                if (defaultValueProperty != null)
+                {
+                    var userValue = defaultValueProperty.Item1.GetValue(entityToInsert, null);
+                    var defaultValue = defaultValueProperty.Item2;
+                    
+                    if (propertyInfo.PropertyType == typeof(int) ||
+                        propertyInfo.PropertyType == typeof(long) ||
+                        propertyInfo.PropertyType == typeof(float) ||
+                        propertyInfo.PropertyType == typeof(double) ||
+                        propertyInfo.PropertyType == typeof(decimal))
+                    {
+                        if (userValue?.ToString() == defaultValue?.ToString() || userValue?.ToString() != "0")
+                        {
+                            allPropertiesExceptKeyAndComputedAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else if (propertyInfo.PropertyType == typeof(string))
+                    {
+                        if (userValue != null)
+                        {
+                            allPropertiesExceptKeyAndComputedAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else if (propertyInfo.PropertyType == typeof(DateTime))
+                    {
+                        if (((DateTime)userValue).ToString(CultureInfo.InvariantCulture) != new DateTime().ToString(CultureInfo.InvariantCulture))
+                        {
+                            allPropertiesExceptKeyAndComputedAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else
+                    {
+                        allPropertiesExceptKeyAndComputedAndDefaultValue.Add(propertyInfo);
+                    }
+                }
+                else
+                {
+                    allPropertiesExceptKeyAndComputedAndDefaultValue.Add(propertyInfo);
+                }
+            }
+            allPropertiesExceptKeyAndComputed = allPropertiesExceptKeyAndComputedAndDefaultValue;
 
             for (var i = 0; i < allPropertiesExceptKeyAndComputed.Count; i++)
             {
@@ -212,8 +260,55 @@ namespace Dapper.Contrib.Extensions
             var allProperties = TypePropertiesCache(type);
             keyProperties.AddRange(explicitKeyProperties);
             var computedProperties = ComputedPropertiesCache(type);
+            var defaultValueProperties = DefaultValuePropertiesCache(type);
             var nonIdProps = allProperties.Except(keyProperties.Union(computedProperties)).ToList();
 
+            var allPropertiesExceptKeyAndDefaultValue = new List<PropertyInfo>();
+            foreach (var propertyInfo in nonIdProps)
+            {
+                var defaultValueProperty = defaultValueProperties.FirstOrDefault(x => x.Item1 == propertyInfo);
+                if (defaultValueProperty != null)
+                {
+                    var userValue = defaultValueProperty.Item1.GetValue(entityToUpdate, null);
+                    var defaultValue = defaultValueProperty.Item2;
+                    
+                    if (propertyInfo.PropertyType == typeof(int) ||
+                        propertyInfo.PropertyType == typeof(long) ||
+                        propertyInfo.PropertyType == typeof(float) ||
+                        propertyInfo.PropertyType == typeof(double) ||
+                        propertyInfo.PropertyType == typeof(decimal))
+                    {
+                        if (userValue?.ToString() == defaultValue?.ToString() || userValue?.ToString() != "0")
+                        {
+                            allPropertiesExceptKeyAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else if (propertyInfo.PropertyType == typeof(string))
+                    {
+                        if (userValue != null)
+                        {
+                            allPropertiesExceptKeyAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else if (propertyInfo.PropertyType == typeof(DateTime))
+                    {
+                        if (((DateTime)userValue).ToString(CultureInfo.InvariantCulture) != new DateTime().ToString(CultureInfo.InvariantCulture))
+                        {
+                            allPropertiesExceptKeyAndDefaultValue.Add(propertyInfo);
+                        }
+                    }
+                    else
+                    {
+                        allPropertiesExceptKeyAndDefaultValue.Add(propertyInfo);
+                    }
+                }
+                else
+                {
+                    allPropertiesExceptKeyAndDefaultValue.Add(propertyInfo);
+                }
+            }
+            nonIdProps = allPropertiesExceptKeyAndDefaultValue;
+            
             var adapter = GetFormatter(connection);
 
             for (var i = 0; i < nonIdProps.Count; i++)
